@@ -35,11 +35,13 @@
   }
 
   .topbar{ display:flex; flex-direction:column; gap:10px; padding:14px 18px 12px;
-    background:linear-gradient(165deg, #3E1E18 0%, #2A1210 100%);
+    background-image: linear-gradient(150deg, #42211C 0%, #6B3C34 55%, #8A4E42 100%);
+    background-size:420px 320px; background-repeat:no-repeat; background-position:top center;
     color:var(--paper); flex-shrink:0; position:relative; z-index:5;
     box-shadow:0 2px 14px rgba(26,10,8,0.30); }
-  .topbar::after{ content:''; position:absolute; left:0; right:0; bottom:0; height:1px;
-    background:linear-gradient(90deg, transparent, rgba(226,200,160,0.45), transparent); }
+  #dashboard-hero::before{ content:''; position:absolute; left:0; right:0; top:-2px; height:6px;
+    background-image:url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A//www.w3.org/2000/svg%22%20viewBox%3D%220%200%20400%2010%22%20preserveAspectRatio%3D%22none%22%3E%3Cdefs%3E%3ClinearGradient%20id%3D%22s%22%20x1%3D%220%22%20y1%3D%220%22%20x2%3D%221%22%20y2%3D%220%22%3E%3Cstop%20offset%3D%220%25%22%20stop-color%3D%22%23FFFDF6%22%20stop-opacity%3D%220%22/%3E%3Cstop%20offset%3D%2222%25%22%20stop-color%3D%22%23FFFDF6%22%20stop-opacity%3D%220.85%22/%3E%3Cstop%20offset%3D%2250%25%22%20stop-color%3D%22%23FFFFFF%22%20stop-opacity%3D%221%22/%3E%3Cstop%20offset%3D%2278%25%22%20stop-color%3D%22%23FFFDF6%22%20stop-opacity%3D%220.85%22/%3E%3Cstop%20offset%3D%22100%25%22%20stop-color%3D%22%23FFFDF6%22%20stop-opacity%3D%220%22/%3E%3C/linearGradient%3E%3C/defs%3E%3Cpath%20d%3D%22M0%2C5%20Q200%2C0%20400%2C5%20Q200%2C10%200%2C5%20Z%22%20fill%3D%22url%28%23s%29%22/%3E%3C/svg%3E");
+    background-size:100% 100%; background-repeat:no-repeat; opacity:0.9; }
   .topbar-brand-row{ display:flex; justify-content:center; }
   .topbar .brand{ display:flex; align-items:center; gap:8px; padding:2px 0; }
   .topbar .brand .mark{ display:flex; align-items:center; }
@@ -286,7 +288,7 @@
   .nav-item .nav-label{ font-size:10px; font-weight:600; }
   .nav-item.active{ color:var(--navy); border-top-color:var(--navy); }
 
-  .segmented{ display:flex; background:#DDE9FA; border-radius:var(--radius-s); padding:3px; margin-bottom:16px; }
+  .segmented{ display:flex; background:var(--brown-tint); border-radius:var(--radius-s); padding:3px; margin-bottom:16px; }
   .segmented button{ flex:1; border:none; background:none; padding:9px 4px; font-size:12.5px; font-weight:600; color:var(--ink-soft); border-radius:5px; cursor:pointer; }
   .segmented button.active{ background:#fff; color:var(--navy-deep); box-shadow:var(--shadow); }
 
@@ -442,8 +444,11 @@
       <div class="preview-divider"><span>or try it instantly</span></div>
 
       <div class="btn-row">
-        <button type="button" class="btn btn-outline" onclick="resetAndPreview('worker')">Preview as worker</button>
-        <button type="button" class="btn btn-outline" onclick="resetAndPreview('business')">Preview as business</button>
+        <button type="button" class="btn btn-outline" onclick="quickPreview('worker')">Preview as worker</button>
+        <button type="button" class="btn btn-outline" onclick="quickPreview('business')">Preview as business</button>
+      </div>
+      <div style="text-align:center;margin-top:12px;">
+        <button type="button" class="btn-link" style="font-size:11.5px;color:var(--ink-soft);" onclick="if(confirm('This clears all demo data — messages, applications, posted shifts, everything — and starts completely fresh. Continue?')) resetAndPreview('worker')">Start over with fresh demo data</button>
       </div>
     </div>
   </div>
@@ -490,7 +495,7 @@
       <!-- WORKER: My work (Jobs + Tasks) -->
       <div id="view-work" class="hidden">
         <!-- Dashboard hero -->
-        <div id="dashboard-hero" style="background:linear-gradient(150deg,#42211C 0%,#6B3C34 55%,#8A4E42 100%);color:#fff;padding:22px 20px 20px;margin:-22px -20px 22px;flex-shrink:0;border-radius:0 0 20px 20px;">
+        <div id="dashboard-hero" style="background-image: linear-gradient(150deg, #42211C 0%, #6B3C34 55%, #8A4E42 100%); background-size:420px 320px; background-repeat:no-repeat; background-position:top center; color:#fff;padding:22px 20px 20px;margin:-22px -20px 22px;flex-shrink:0;border-radius:0 0 20px 20px;position:relative;">
           <div id="dash-greeting" style="font-size:14px;opacity:.8;margin-bottom:4px;"></div>
           <div id="dash-next-shift" style="font-size:13.5px;background:rgba(255,255,255,.12);border-radius:var(--radius-m);padding:11px 14px;margin-bottom:14px;line-height:1.4;"></div>
           <div style="display:flex;gap:10px;">
@@ -517,7 +522,7 @@
           <button id="worksub-available-btn" onclick="setWorkSubView('available')">Available</button>
         </div>
         <div id="work-mine-panel"><div id="tasks-list"></div></div>
-        <div id="work-available-panel" class="hidden"><div id="worker-jobs-list"></div></div>
+        <div id="work-available-panel" class="hidden"><div class="card" id="worker-jobs-list"></div></div>
       </div>
 
       <!-- WORKER: Activity -->
@@ -564,6 +569,7 @@
 
       <!-- BUSINESS: Workers (Team / Applicants / Invite) -->
       <div id="view-workers" class="hidden">
+        <div class="section-label">Your team</div>
         <div class="segmented">
           <button id="workersub-team-btn" class="active" onclick="setWorkersSubView('team')">Team</button>
           <button id="workersub-applicants-btn" onclick="setWorkersSubView('applicants')">Applicants</button>
@@ -576,6 +582,7 @@
 
       <!-- BUSINESS: Market -->
       <div id="view-market" class="hidden">
+        <div class="section-label">Market</div>
         <div class="segmented">
           <button id="market-seekers-btn" class="active" onclick="setMarketView('seekers')">Looking for work</button>
           <button id="market-biz-btn" onclick="setMarketView('biz')">Businesses</button>
@@ -611,7 +618,7 @@
     <div class="bottom-nav" id="worker-nav">
       <button class="nav-item" id="nav-find" onclick="showView('find')"><span class="nav-icon"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="10" cy="10" r="6"></circle><line x1="20" y1="20" x2="14.5" y2="14.5"></line></svg></span><span class="nav-label">Find work</span></button>
       <button class="nav-item" id="nav-work" onclick="showView('work')"><span class="nav-icon"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7a1 1 0 0 1 1-1h5l2 2h9a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V7z"></path></svg></span><span class="nav-label">My work</span></button>
-      <button class="nav-item" id="nav-activity-worker" onclick="showView('activity-worker')"><span class="nav-icon"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 10a6 6 0 0 1 12 0c0 4 1.5 5.5 1.5 5.5H4.5S6 14 6 10z"></path><path d="M10 19a2 2 0 0 0 4 0"></path></svg></span><span class="nav-label">Activity</span></button>
+      <button class="nav-item" id="nav-activity-worker" onclick="showView('activity-worker')"><span class="nav-icon"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 12 7 12 10 19 14 5 17 12 21 12"></polyline></svg></span><span class="nav-label">Activity</span></button>
       <button class="nav-item" id="nav-payment" onclick="showView('payment')"><span class="nav-icon"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="6" width="18" height="13" rx="2"></rect><path d="M3 10h18"></path><circle cx="17" cy="14" r="1.3"></circle></svg></span><span class="nav-label">Pay</span></button>
       <button class="nav-item" id="nav-calendar-worker" onclick="showView('calendar-worker')"><span class="nav-icon"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="16" rx="2"></rect><line x1="3" y1="10" x2="21" y2="10"></line><line x1="8" y1="3" x2="8" y2="7"></line><line x1="16" y1="3" x2="16" y2="7"></line></svg></span><span class="nav-label">Calendar</span></button>
     </div>
@@ -620,7 +627,7 @@
       <button class="nav-item" id="nav-post" onclick="showView('post')"><span class="nav-icon"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg></span><span class="nav-label">Post</span></button>
       <button class="nav-item" id="nav-workers" onclick="showView('workers')"><span class="nav-icon"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8" r="3"></circle><path d="M3 20c0-3.5 2.7-6 6-6s6 2.5 6 6"></path><circle cx="17" cy="9" r="2.2"></circle><path d="M15.5 20c.2-2.6 1.6-4.4 3.5-4.9"></path></svg></span><span class="nav-label">Workers</span></button>
       <button class="nav-item" id="nav-market" onclick="showView('market')"><span class="nav-icon"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><line x1="4" y1="20" x2="4" y2="12"></line><line x1="10" y1="20" x2="10" y2="6"></line><line x1="16" y1="20" x2="16" y2="15"></line><line x1="4" y1="20" x2="20" y2="20"></line></svg></span><span class="nav-label">Market</span></button>
-      <button class="nav-item" id="nav-activity-biz" onclick="showView('activity-biz')"><span class="nav-icon"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 10a6 6 0 0 1 12 0c0 4 1.5 5.5 1.5 5.5H4.5S6 14 6 10z"></path><path d="M10 19a2 2 0 0 0 4 0"></path></svg></span><span class="nav-label">Activity</span></button>
+      <button class="nav-item" id="nav-activity-biz" onclick="showView('activity-biz')"><span class="nav-icon"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 12 7 12 10 19 14 5 17 12 21 12"></polyline></svg></span><span class="nav-label">Activity</span></button>
       <button class="nav-item" id="nav-calendar-biz" onclick="showView('calendar-biz')"><span class="nav-icon"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="16" rx="2"></rect><line x1="3" y1="10" x2="21" y2="10"></line><line x1="8" y1="3" x2="8" y2="7"></line><line x1="16" y1="3" x2="16" y2="7"></line></svg></span><span class="nav-label">Calendar</span></button>
       <button class="nav-item" id="nav-payroll" onclick="showView('payroll')"><span class="nav-icon"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="5" width="20" height="14" rx="2"></rect><path d="M2 10h20"></path><circle cx="12" cy="15" r="2"></circle><path d="M6 15h2M16 15h2"></path></svg></span><span class="nav-label">Payroll</span></button>
     </div>
@@ -1367,20 +1374,50 @@ function renderPassport(){
 // "Jobs" — the companies you currently work for, and their open shifts to pick up.
 function renderWorkerJobs(){
   if(currentUser.role !== 'worker') return;
-  const myApps = DB.teamApps().filter(a => a.workerId === currentUser.id && a.status === 'accepted');
+  const myApps = DB.teamApps().filter(a => a.workerId === currentUser.id && a.status === 'accepted')
+    .sort((a,b) => a.businessName.localeCompare(b.businessName));
   const list = document.getElementById('worker-jobs-list');
   if(myApps.length === 0){ list.innerHTML = emptyState('You are not on any team yet.', 'Apply to a business in "Find work" — once they accept you, they will show up here.'); return; }
 
-  list.innerHTML = myApps.map(app => {
+  list.innerHTML = myApps.map((app, i) => {
     const jobs = DB.jobs().filter(j => j.businessId === app.businessId);
-    const takeable = jobs.filter(j => j.status === 'open' && !j.takenBy.find(t => t.workerId === currentUser.id));
-    const takeableHtml = takeable.length === 0 ? '<div class="hint">No open shifts right now.</div>' : takeable.map(j =>
-      '<div class="applicant-row" style="align-items:flex-start;"><div><span class="applicant-name">' + escapeHtml(j.title) + '</span><br>' +
-      '<span style="font-size:11.5px;color:var(--ink-soft);">' + escapeHtml(j.pay) + ' · ' + formatDate(j.date) + '</span></div>' +
-      '<button class="btn btn-navy btn-sm" onclick="takeJob(\'' + j.id + '\')">Take shift</button></div>'
-    ).join('');
-    return '<div class="card job-card"><h3 style="margin-bottom:10px;">' + escapeHtml(app.businessName) + '</h3>' + takeableHtml + '</div>';
+    const takeable = jobs.filter(j => j.status === 'open' && !j.takenBy.find(t => t.workerId === currentUser.id))
+      .sort((a,b) => (a.date||'9999').localeCompare(b.date||'9999'));
+    const rows = takeable.length === 0
+      ? '<div class="hint" style="padding:4px 0 2px;">No open shifts right now.</div>'
+      : takeable.map(j =>
+          '<button class="person-row" onclick="openAvailableShiftDetail(\'' + j.id + '\')">' +
+            '<div class="person-info">' +
+              '<div class="person-name">' + escapeHtml(j.title) + '</div>' +
+              '<div class="person-sub">' + escapeHtml(j.pay) + ' · ' + formatDate(j.date) +
+              (j.shiftStart && j.shiftEnd ? ' · ' + j.shiftStart + '–' + j.shiftEnd : '') + '</div>' +
+            '</div>' +
+            '<div class="chevron">›</div>' +
+          '</button>'
+        ).join('');
+    return (i > 0 ? '<div class="divider"></div>' : '') +
+      '<div style="font-weight:800;font-size:16px;color:var(--navy-deep);margin-bottom:1px;">' + escapeHtml(app.businessName) + '</div>' +
+      '<div style="font-size:11px;color:var(--ink-soft);text-transform:uppercase;letter-spacing:0.06em;font-weight:600;margin-bottom:10px;">' + takeable.length + ' shift' + (takeable.length===1?'':'s') + ' available</div>' +
+      rows;
   }).join('');
+}
+function openAvailableShiftDetail(jobId){
+  if(currentUser.role !== 'worker') return;
+  const job = DB.jobs().find(j => j.id === jobId);
+  if(!job || job.status !== 'open') return;
+  document.getElementById('worker-modal').classList.remove('hidden');
+  document.getElementById('worker-modal-panel').innerHTML =
+    '<div class="modal-header"><h3 style="font-size:18px;">' + escapeHtml(job.title) + '</h3><button class="modal-close" onclick="closeWorkerModal()">✕</button></div>' +
+    '<div style="font-weight:700;font-size:14.5px;color:var(--navy-deep);margin-bottom:14px;">' + escapeHtml(job.businessName) + '</div>' +
+    (job.description ? '<div style="font-size:13.5px;line-height:1.6;color:var(--ink-soft);margin-bottom:16px;">' + escapeHtml(job.description) + '</div>' : '') +
+    '<div class="post-facts" style="padding:0 0 16px;">' +
+      '<span class="fact pay">' + escapeHtml(job.pay) + '</span>' +
+      (job.date ? '<span class="fact">' + formatDate(job.date) + '</span>' : '') +
+      (job.shiftStart && job.shiftEnd ? '<span class="fact">' + job.shiftStart + '–' + job.shiftEnd + '</span>' : '') +
+      (job.breakMins ? '<span class="fact">' + job.breakMins + 'm break</span>' : '') +
+      (job.location ? '<span class="fact">' + escapeHtml(job.location) + '</span>' : '') +
+    '</div>' +
+    '<button class="btn btn-navy" onclick="takeJob(\'' + jobId + '\'); closeWorkerModal();">Take this shift</button>';
 }
 function shiftsOverlap(existingJobs, newJob){
   if(!newJob.date || !newJob.shiftStart || !newJob.shiftEnd) return false;
@@ -1551,11 +1588,25 @@ function renderWorkerTasks(){
 
   const list = document.getElementById('tasks-list');
   if(all.length === 0){ list.innerHTML = emptyState('Nothing here yet.', 'Shifts you take and tasks assigned to you will show up here.'); return; }
+  const thisMonthISO = new Date().toISOString().slice(0,7);
+  const doneThisMonth = done.filter(x => (x.date||'').slice(0,7) === thisMonthISO);
+  const doneOlder = done.filter(x => (x.date||'').slice(0,7) !== thisMonthISO);
   list.innerHTML =
     '<div class="applicants-label">To do & upcoming</div>' +
     (todo.length === 0 ? '<div class="hint" style="margin-bottom:16px;">All clear!</div>' : todo.map(rowHtml).join('')) +
-    '<div class="applicants-label" style="margin-top:16px;">Completed</div>' +
-    (done.length === 0 ? '<div class="hint">Nothing completed yet.</div>' : done.map(rowHtml).join(''));
+    '<div class="applicants-label" style="margin-top:16px;">Completed this month</div>' +
+    (doneThisMonth.length === 0 ? '<div class="hint">Nothing completed yet this month.</div>' : doneThisMonth.map(rowHtml).join('')) +
+    (doneOlder.length > 0 ?
+      '<button class="btn btn-outline btn-sm" style="margin:10px 0 4px;" onclick="toggleWorkerTasksOlder()" id="tasks-older-toggle">See previous months (' + doneOlder.length + ')</button>' +
+      '<div id="tasks-older-list" class="hidden">' + doneOlder.map(rowHtml).join('') + '</div>'
+      : '');
+}
+function toggleWorkerTasksOlder(){
+  const el = document.getElementById('tasks-older-list');
+  const btn = document.getElementById('tasks-older-toggle');
+  if(!el || !btn) return;
+  const nowHidden = el.classList.toggle('hidden');
+  btn.textContent = nowHidden ? btn.textContent.replace('Hide', 'See') : btn.textContent.replace('See', 'Hide');
 }
 function completeWorkerTask(taskId){
   if(currentUser.role !== 'worker') return;
@@ -3322,7 +3373,13 @@ function openSeekerPost(){
 function saveSeekerPost(e){
   e.preventDefault();
   if(!currentUser || currentUser.role !== 'worker') return;
-  if(!currentUser.avatar){ return; }
+  if(!currentUser.avatar){
+    const users = DB.users();
+    const u = users.find(x => x.id === currentUser.id);
+    u.avatar = STANDARD_AVATAR;
+    currentUser.avatar = STANDARD_AVATAR;
+    DB.saveUsers(users);
+  }
   const headline = document.getElementById('sp-headline').value.trim();
   const errEl = document.getElementById('sp-error');
   if(errEl) errEl.classList.add('hidden');
