@@ -7,6 +7,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Abril+Fatface:ital@1&family=Archivo+Expanded:wght@600;700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <style>
   :root{
     --ink:#2A1614; --ink-soft:#7D6058; --paper:#EDE4CC; --surface:#F7F1E2; --border:#C9B99A;
@@ -439,17 +440,8 @@
         </div>
 
         <button type="submit" class="btn btn-primary" id="auth-submit-btn">Log in</button>
+        <div id="auth-loading" class="hint hidden" style="text-align:center;margin-top:10px;">Please wait…</div>
       </form>
-
-      <div class="preview-divider"><span>or try it instantly</span></div>
-
-      <div class="btn-row">
-        <button type="button" class="btn btn-outline" onclick="quickPreview('worker')">Preview as worker</button>
-        <button type="button" class="btn btn-outline" onclick="quickPreview('business')">Preview as business</button>
-      </div>
-      <div style="text-align:center;margin-top:12px;">
-        <button type="button" class="btn-link" style="font-size:11.5px;color:var(--ink-soft);" onclick="if(confirm('This clears all demo data — messages, applications, posted shifts, everything — and starts completely fresh. Continue?')) resetAndPreview('worker')">Start over with fresh demo data</button>
-      </div>
     </div>
   </div>
 
@@ -702,36 +694,149 @@
 
 <script>
 /* =========================================================
-   TASSQR — front-end prototype. All data in localStorage.
-
-   Model: a worker applies to JOIN A BUSINESS'S TEAM (teamApps),
-   not to individual jobs. Once accepted, they can freely take
-   any of that business's open jobs (job.takenBy).
+   TASSQR — connected to Supabase for real, shared, permanent data.
+   Everything below still speaks the app's original language
+   (DB.jobs(), DB.saveUsers(), etc.) — only what happens
+   *inside* those functions has changed.
 ========================================================= */
 
-const DB = {
-  users: () => JSON.parse(localStorage.getItem('ty_users') || '[]'),
-  saveUsers: (u) => localStorage.setItem('ty_users', JSON.stringify(u)),
-  jobs: () => JSON.parse(localStorage.getItem('ty_jobs') || '[]').map(normalizeJob),
-  saveJobs: (j) => localStorage.setItem('ty_jobs', JSON.stringify(j)),
-  teamApps: () => JSON.parse(localStorage.getItem('ty_teamapps') || '[]'),
-  saveTeamApps: (t) => localStorage.setItem('ty_teamapps', JSON.stringify(t)),
-  tasks: () => JSON.parse(localStorage.getItem('ty_tasks') || '[]'),
-  saveTasks: (t) => localStorage.setItem('ty_tasks', JSON.stringify(t)),
-  messages: () => JSON.parse(localStorage.getItem('ty_messages') || '[]'),
-  saveMessages: (m) => localStorage.setItem('ty_messages', JSON.stringify(m)),
-  activities: () => JSON.parse(localStorage.getItem('ty_activities') || '[]'),
-  saveActivities: (a) => localStorage.setItem('ty_activities', JSON.stringify(a)),
-  holidayPay: () => JSON.parse(localStorage.getItem('ty_holiday_pay') || '{}'),
-  saveHolidayPay: (f) => localStorage.setItem('ty_holiday_pay', JSON.stringify(f)),
-  approvedPayments: () => JSON.parse(localStorage.getItem('ty_approved_payments') || '[]'),
-  saveApprovedPayments: (a) => localStorage.setItem('ty_approved_payments', JSON.stringify(a)),
-  seekerPosts: () => JSON.parse(localStorage.getItem('ty_seeker_posts') || '[]'),
-  saveSeekerPosts: (s) => localStorage.setItem('ty_seeker_posts', JSON.stringify(s)),
-  session: () => JSON.parse(localStorage.getItem('ty_session') || 'null'),
-  saveSession: (s) => localStorage.setItem('ty_session', JSON.stringify(s)),
-  clearSession: () => localStorage.removeItem('ty_session'),
+// ---------- Supabase connection ----------
+const SUPABASE_URL = 'https://rfiucmpciuikthxdyqrj.supabase.co';
+const SUPABASE_KEY = 'sb_publishable_JnvjT_z9zbByDM25CaIR9A_a9SqHv5h';
+const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+// ---------- camelCase (app) <-> snake_case (database) ----------
+function toSnakeCase(obj){
+  const out = {};
+  for(const k in obj){
+    if(k === 'takenBy') continue; // not a real column — synced separately
+    out[k.replace(/([A-Z])/g, m => '_' + m.toLowerCase())] = obj[k];
+  }
+  return out;
+}
+function toCamelCase(obj){
+  const out = {};
+  for(const k in obj){
+    out[k.replace(/_([a-z])/g, (_, c) => c.toUpperCase())] = obj[k];
+  }
+  return out;
+}
+
+// ---------- Local cache — mirrors the database, refreshed on load/login ----------
+let _cache = {
+  profiles: [], jobs: [], job_assignments: [], team_apps: [],
+  tasks: [], messages: [], activities: [], approved_payments: [],
+  seeker_posts: [], holiday_pay: []
 };
+
+function buildJobsFromCache(){
+  const byJob = {};
+  _cache.job_assignments.forEach(a => {
+    const t = toCamelCase(a);
+    (byJob[t.jobId] = byJob[t.jobId] || []).push(t);
+  });
+  return _cache.jobs.map(j => {
+    const t = toCamelCase(j);
+    t.takenBy = byJob[t.id] || [];
+    return t;
+  });
+}
+
+async function loadAllData(){
+  const [profiles, jobs, assignments, teamApps, tasks, messages, activities, payments, seekerPosts, holidayPay] = await Promise.all([
+    sb.from('profiles').select('*'),
+    sb.from('jobs').select('*'),
+    sb.from('job_assignments').select('*'),
+    sb.from('team_apps').select('*'),
+    sb.from('tasks').select('*'),
+    sb.from('messages').select('*'),
+    sb.from('activities').select('*'),
+    sb.from('approved_payments').select('*'),
+    sb.from('seeker_posts').select('*'),
+    sb.from('holiday_pay').select('*'),
+  ]);
+  [profiles, jobs, assignments, teamApps, tasks, messages, activities, payments, seekerPosts, holidayPay].forEach(r => {
+    if(r.error) console.error('TASSQR: could not load data —', r.error.message);
+  });
+  _cache.profiles = profiles.data || [];
+  _cache.jobs = jobs.data || [];
+  _cache.job_assignments = assignments.data || [];
+  _cache.team_apps = teamApps.data || [];
+  _cache.tasks = tasks.data || [];
+  _cache.messages = messages.data || [];
+  _cache.activities = activities.data || [];
+  _cache.approved_payments = payments.data || [];
+  _cache.seeker_posts = seekerPosts.data || [];
+  _cache.holiday_pay = holidayPay.data || [];
+}
+
+// Save one row for real, in the background. The screen has already
+// updated from the local cache by the time this finishes.
+async function upsertRow(table, camelObj){
+  const { error } = await sb.from(table).upsert(toSnakeCase(camelObj));
+  if(error) console.error('TASSQR: could not save to ' + table + ' —', error.message);
+}
+async function deleteRow(table, id){
+  const { error } = await sb.from(table).delete().eq('id', id);
+  if(error) console.error('TASSQR: could not delete from ' + table + ' —', error.message);
+}
+async function syncAssignmentsForJob(jobId, takenBy){
+  await sb.from('job_assignments').delete().eq('job_id', jobId);
+  if(takenBy && takenBy.length){
+    const rows = takenBy.map(t => toSnakeCase(Object.assign({}, t, { jobId })));
+    const { error } = await sb.from('job_assignments').insert(rows);
+    if(error) console.error('TASSQR: could not save shift assignments —', error.message);
+  }
+}
+
+// ---------- DB — same names every existing function already calls ----------
+const DB = {
+  users: () => _cache.profiles.map(toCamelCase),
+  saveUsers: (arr) => {
+    _cache.profiles = arr.map(toSnakeCase);
+    arr.forEach(u => upsertRow('profiles', u));
+  },
+
+  jobs: () => buildJobsFromCache(),
+  saveJobs: (arr) => {
+    _cache.jobs = arr.map(j => { const { takenBy, ...rest } = j; return toSnakeCase(rest); });
+    const rows = [];
+    arr.forEach(j => (j.takenBy || []).forEach(t => rows.push(toSnakeCase(Object.assign({}, t, { jobId: j.id })))));
+    _cache.job_assignments = rows;
+    arr.forEach(j => {
+      const { takenBy, ...jobFields } = j;
+      upsertRow('jobs', jobFields);
+      syncAssignmentsForJob(j.id, takenBy);
+    });
+  },
+
+  teamApps: () => _cache.team_apps.map(toCamelCase),
+  saveTeamApps: (arr) => { _cache.team_apps = arr.map(toSnakeCase); arr.forEach(t => upsertRow('team_apps', t)); },
+
+  tasks: () => _cache.tasks.map(toCamelCase),
+  saveTasks: (arr) => { _cache.tasks = arr.map(toSnakeCase); arr.forEach(t => upsertRow('tasks', t)); },
+
+  messages: () => _cache.messages.map(toCamelCase),
+  saveMessages: (arr) => { _cache.messages = arr.map(toSnakeCase); arr.forEach(m => upsertRow('messages', m)); },
+
+  activities: () => _cache.activities.map(toCamelCase),
+  saveActivities: (arr) => { _cache.activities = arr.map(toSnakeCase); arr.forEach(a => upsertRow('activities', a)); },
+
+  holidayPay: () => { const o = {}; _cache.holiday_pay.forEach(r => { o[r.worker_id] = r.collected; }); return o; },
+  saveHolidayPay: (obj) => { Object.keys(obj).forEach(workerId => upsertRow('holiday_pay', { workerId, collected: obj[workerId] })); },
+
+  approvedPayments: () => _cache.approved_payments.map(toCamelCase),
+  saveApprovedPayments: (arr) => { _cache.approved_payments = arr.map(toSnakeCase); arr.forEach(a => upsertRow('approved_payments', a)); },
+
+  seekerPosts: () => _cache.seeker_posts.map(toCamelCase),
+  saveSeekerPosts: (arr) => { _cache.seeker_posts = arr.map(toSnakeCase); arr.forEach(s => upsertRow('seeker_posts', s)); },
+
+  // Real login sessions are now handled entirely by Supabase Auth (see boot() below)
+  session: () => null,
+  saveSession: () => {},
+  clearSession: () => {},
+};
+
 
 function normalizeJob(j){
   return Object.assign({ slotsNeeded: 1, takenBy: [], status: 'open', payAmount:0, payType:'flat', payHours:null, payout:0, date:'' }, j);
@@ -848,51 +953,65 @@ function updateExtraFieldsVisibility(){
 function showAuthError(msg){ const el = document.getElementById('auth-error'); el.textContent = msg; el.classList.remove('hidden'); }
 function clearAuthError(){ document.getElementById('auth-error').classList.add('hidden'); }
 
-function handleAuthSubmit(e){
+async function handleAuthSubmit(e){
   e.preventDefault();
   clearAuthError();
   const email = document.getElementById('email-input').value.trim().toLowerCase();
   const password = document.getElementById('password-input').value;
-  const users = DB.users();
 
   if(!email || !email.includes('@')){ showAuthError('Enter a valid email address.'); return; }
   if(!password || password.length < 4){ showAuthError('Password must be at least 4 characters.'); return; }
 
-  if(authMode === 'register'){
-    const name = document.getElementById('name-input').value.trim();
-    if(!name){ showAuthError('Enter your name to create an account.'); return; }
-    if(users.find(u => u.email === email)){ showAuthError('An account with that email already exists. Try logging in instead.'); return; }
-    const newUser = { id: uid('u'), name, email, password, role: authRole };
-    if(authRole === 'worker'){
-      newUser.phone = document.getElementById('reg-phone').value.trim();
-      newUser.cpr = document.getElementById('reg-cpr').value.trim();
-      newUser.address = document.getElementById('reg-address').value.trim();
-      newUser.cv = { headline:'', summary:'', skills:'', pastEmployment: [], education:'' };
+  const loadingEl = document.getElementById('auth-loading');
+  const submitBtn = document.getElementById('auth-submit-btn');
+  loadingEl.classList.remove('hidden');
+  submitBtn.disabled = true;
+
+  try {
+    if(authMode === 'register'){
+      const name = document.getElementById('name-input').value.trim();
+      if(!name){ showAuthError('Enter your name to create an account.'); loadingEl.classList.add('hidden'); submitBtn.disabled = false; return; }
+
+      const { data, error } = await sb.auth.signUp({ email, password });
+      if(error){ showAuthError(error.message); return; }
+      const userId = data.user.id;
+
+      const newProfile = { id: userId, name, email, role: authRole, cv: { headline:'', summary:'', skills:'', pastEmployment: [], education:'' } };
+      if(authRole === 'worker'){
+        newProfile.phone = document.getElementById('reg-phone').value.trim();
+        newProfile.address = document.getElementById('reg-address').value.trim();
+      } else {
+        newProfile.about = document.getElementById('reg-about').value.trim();
+      }
+      const { error: profileError } = await sb.from('profiles').insert(toSnakeCase(newProfile));
+      if(profileError){ showAuthError('Account created, but profile setup failed: ' + profileError.message); return; }
+
+      const tfn = authRole === 'worker' ? document.getElementById('reg-cpr').value.trim() : '';
+      if(tfn){ await sb.from('worker_private').upsert({ worker_id: userId, tfn }); }
+
+      await loadAllData();
+      enterApp(toCamelCase(newProfile));
     } else {
-      newUser.about = document.getElementById('reg-about').value.trim();
+      const { data, error } = await sb.auth.signInWithPassword({ email, password });
+      if(error){ showAuthError('That email and password do not match an account. Check them, or create an account.'); return; }
+
+      const { data: profile, error: profileError } = await sb.from('profiles').select('*').eq('id', data.user.id).single();
+      if(profileError || !profile){ showAuthError('Could not load your profile. Please try again.'); return; }
+
+      await loadAllData();
+      enterApp(toCamelCase(profile));
     }
-    users.push(newUser);
-    DB.saveUsers(users);
-    DB.saveSession({ userId: newUser.id });
-    enterApp(newUser);
-  } else {
-    const user = users.find(u => u.email === email && u.password === password);
-    if(!user){ showAuthError('That email and password do not match an account. Check them, or create an account.'); return; }
-    DB.saveSession({ userId: user.id });
-    enterApp(user);
+  } catch(err){
+    showAuthError('Something went wrong: ' + err.message);
+  } finally {
+    loadingEl.classList.add('hidden');
+    submitBtn.disabled = false;
   }
 }
 
-function quickPreview(role){
-  seedDemoData();
-  const targetId = role === 'worker' ? 'demo_w1' : 'demo_biz_a';
-  const user = DB.users().find(u => u.id === targetId);
-  DB.saveSession({ userId: user.id });
-  enterApp(user);
-}
-
-function logout(){
-  DB.clearSession();
+async function logout(){
+  await sb.auth.signOut();
+  currentUser = null;
   document.getElementById('app-screen').classList.add('hidden');
   document.getElementById('auth-screen').classList.remove('hidden');
   document.getElementById('auth-form').reset();
@@ -2866,206 +2985,6 @@ function handleSendMessage(e, toId, toName){
   renderMessagesOverlay();
 }
 
-// ================= DEMO SEED DATA =================
-function resetAndPreview(role){
-  ['ty_users','ty_jobs','ty_teamapps','ty_tasks','ty_messages','ty_activities',
-   'ty_holiday_pay','ty_approved_payments','ty_seeker_posts','ty_clockstate','ty_payroll_edits','ty_msg_read','ty_session','ty_seeded_v2','ty_seeded_v3','ty_seeded_v4','ty_seeded_v5','ty_seeded_v6','ty_seeded_v7','ty_seeded_v8','ty_seeded_v9','ty_seeded_v10','ty_seeded_v11','ty_seeded_v12'].forEach(k => localStorage.removeItem(k));
-  clockState = {}; payrollEdits = {};
-  quickPreview(role);
-}
-
-function seedDemoData(){
-  if(localStorage.getItem('ty_seeded_v12')) return;
-
-  const bizA = { id:'demo_biz_a', banner: BIZ_BANNERS[0], name:'Harbour Café Pty Ltd', email:'demo@harbourcafe.com.au', password:'demo1234', role:'business', avatar: 'data:image/svg+xml;utf8,%3Csvg%20xmlns%3D%22http%3A//www.w3.org/2000/svg%22%20viewBox%3D%220%200%20100%20100%22%3E%3Crect%20width%3D%22100%22%20height%3D%22100%22%20fill%3D%22%231C59C6%22/%3E%3Cpath%20d%3D%22M22%2082V44l28-20%2028%2020v38z%22%20fill%3D%22none%22%20stroke%3D%22rgba%28255%2C255%2C255%2C0.95%29%22%20stroke-width%3D%224%22%20stroke-linejoin%3D%22round%22/%3E%3Crect%20x%3D%2238%22%20y%3D%2258%22%20width%3D%2224%22%20height%3D%2224%22%20fill%3D%22rgba%28255%2C255%2C255%2C0.95%29%22/%3E%3Crect%20x%3D%2227%22%20y%3D%2252%22%20width%3D%2210%22%20height%3D%2210%22%20fill%3D%22rgba%28255%2C255%2C255%2C0.95%29%22/%3E%3Crect%20x%3D%2263%22%20y%3D%2252%22%20width%3D%2210%22%20height%3D%2210%22%20fill%3D%22rgba%28255%2C255%2C255%2C0.95%29%22/%3E%3C/svg%3E',
-    about: 'Friendly harbourside café looking for reliable people for shifts, markets, and events.' };
-  const bizB = { id:'demo_biz_b', banner: BIZ_BANNERS[1], name:'Westside BuildCo', email:'demo@westsidebuildco.com.au', password:'demo1234', role:'business', avatar: 'data:image/svg+xml;utf8,%3Csvg%20xmlns%3D%22http%3A//www.w3.org/2000/svg%22%20viewBox%3D%220%200%20100%20100%22%3E%3Crect%20width%3D%22100%22%20height%3D%22100%22%20fill%3D%22%23B85F18%22/%3E%3Cpath%20d%3D%22M22%2082V44l28-20%2028%2020v38z%22%20fill%3D%22none%22%20stroke%3D%22rgba%28255%2C255%2C255%2C0.95%29%22%20stroke-width%3D%224%22%20stroke-linejoin%3D%22round%22/%3E%3Crect%20x%3D%2238%22%20y%3D%2258%22%20width%3D%2224%22%20height%3D%2224%22%20fill%3D%22rgba%28255%2C255%2C255%2C0.95%29%22/%3E%3Crect%20x%3D%2227%22%20y%3D%2252%22%20width%3D%2210%22%20height%3D%2210%22%20fill%3D%22rgba%28255%2C255%2C255%2C0.95%29%22/%3E%3Crect%20x%3D%2263%22%20y%3D%2252%22%20width%3D%2210%22%20height%3D%2210%22%20fill%3D%22rgba%28255%2C255%2C255%2C0.95%29%22/%3E%3C/svg%3E',
-    about: 'Small construction and repair company around Richmond/Melbourne — helper work, deliveries, and site support.' };
-
-  const workerNames = ['James Mitchell','Emma Wilson','Liam Thompson','Sophie Anderson','Noah Clarke','Isla Harris','Ethan Martin','Ava Robinson','Jack Davis','Chloe Taylor'];
-  const workerAvatars = [
-    'data:image/jpeg;base64,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',
-    'data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAAkGBwgHBgkIBwgKCgkLDRYPDQwMDRsUFRAWIB0iIiAdHx8kKDQsJCYxJx8fLT0tMTU3Ojo6Iys/RD84QzQ5Ojf/2wBDAQoKCg0MDRoPDxo3JR8lNzc3Nzc3Nzc3Nzc3Nzc3Nzc3Nzc3Nzc3Nzc3Nzc3Nzc3Nzc3Nzc3Nzc3Nzc3Nzc3Nzf/wAARCACAAIADASIAAhEBAxEB/8QAGwABAAIDAQEAAAAAAAAAAAAAAAIGAQMFBAf/xAA0EAABBAEBBAULBQEAAAAAAAABAAIDEQQFBiExQQcSEyJRFBUXI1JVYnGBkqEyQlRh0aL/xAAYAQEAAwEAAAAAAAAAAAAAAAAAAQIDBP/EAB8RAQEBAQABBQEBAAAAAAAAAAABAhEDEiEiMUEEUf/aAAwDAQACEQMRAD8A+q2lqNpa53QlaWo2loJWlqNpaCVpajaWglaWo2loJWlqNpaCVpajaWglaWo2loIosWloMosWloMrDnNY0ucQ1oFkk0AtGblwYOLJk5TwyKMW5xXyvaTaTK1qdzQ50WGD3IQeP9u8Sqa3Mr4xdLxqW22k4T3RxOkynjj2I7v3FcSbpFm63qNOjDfjlJP4CoyLK+TTeeLMXmHpFm63r9OjLfglIP5C7em7baTmvbHK6TFeeHbDu/cF8rRJ5NQvizX3drmvaHNIc0iwQbBWV8j2b2kytFna0udLhk9+Enh/bfAr6phZcGdix5OK8PikFtcFrnc0w3i5ehFi0tXUZRYtLQRtLUbS0SlaWo2loKF0kak508GmxuIawdrIPEnh+FSVZukKN7doC9zSGvhZ1TyNbiuds/oeRrmRJHA9sbI22+R4sDwC5t++nVjkzHKRXL0fZfvDH+xyej7L94Y/2OVeVPqimorl6Psv3hj/AGOT0fZfvDH+xycp6opqu3RvqTmzz6bI4lrx2sY8COP4Ve2g0PI0PIjjne2RkjbZIwUD4hdHo9je7aAPa0lrIX9Y8he4K2PbURvlzX0+0tRtLXS5UrS1G0tBFFi0tBlFi0tBwtsNEdrGnh2O0HKgJdGPaHNq27H6d5u0OFr2ls03rJA4bwTy+gXZapLHc+TbN+PBERVBERBxNsNO846HM1jS6aH1kYaN5I5fULVsfojtH08uyGgZU5DpB7I5NVgUXK2J8kavx4IsWlrZkyixaWgiijaWiUkUbS0E2neti02tjTYtZ7n6vmpIiLNYREQFrcd6k40LWu1pifqur+Moo2lrRRJFG0tBG0tRtLQStLUbWvIyIsaIyzvDGDmUTzrda1zZcOKOtPMyMfEatVjUdo5pSWYQMTPbP6j/AIuG97pHl8ji5x4lxsqfT10Y/nt977Po+FnY+dGZMaTrtBo7q3r0qo7LTs7GWC6kDusBfEUrCJZBwcVhqcvFd59OuPavPmZkGFF2uQ/qtsDha1GWQ8XFcLaedjcNsJIMj3g1zoc1GZ28Mz1Xjuw5cOUOtBMyQfCbpbLXzhj3RvD43FrhwLTRXc07aOaIhmaDKz2x+of6uj08W3/PZ7z3Wu0tacfIiyYhLA8PYeYWy1Dn5xK0tRtLRDCKNrEkjY2Oe8hrWiyTyCJas3MhwoDNMaA4AcXHwCpmoZ02fOZJTTf2sHBoUtVzn5+UZDYjG5jfALxq0ju8XimJ2/YiIpbJRvfG8PjcWuHAg7wvaNa1AADyg/VoXgRRZL9ouZft0PPWofyP+QvDLLJNIZJXue88S42VFEkkJmT6giIpS9Wn502BOJIjbf3MPBwVzwsyHNgE0JsHiDxafAqhL2aVnPwMoSCzGdz2+IUWMfL4pudn2vKKEcjZGNewhzXCwRzCzaq4UbXD2nzCyFmKw75O8/5Bdq1TNXn8o1Gd92A7qt+Q3KY38Ge67/jxoiKztEREBERAREQEREBERBZdmMwvhfivO+PvM+RXctUrSJ/J9RgfdAu6rvkdyudqtcXnzzXf9f/Z',
-    'data:image/jpeg;base64,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',
-    'data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAAkGBwgHBgkIBwgKCgkLDRYPDQwMDRsUFRAWIB0iIiAdHx8kKDQsJCYxJx8fLT0tMTU3Ojo6Iys/RD84QzQ5Ojf/2wBDAQoKCg0MDRoPDxo3JR8lNzc3Nzc3Nzc3Nzc3Nzc3Nzc3Nzc3Nzc3Nzc3Nzc3Nzc3Nzc3Nzc3Nzc3Nzc3Nzc3Nzf/wAARCACAAIADASIAAhEBAxEB/8QAGwABAAIDAQEAAAAAAAAAAAAAAAECAwQFBgf/xAA0EAABBAECAgYIBgMAAAAAAAAAAQIDEQQFIRIxBiJBYZHRExQVIzJRU2IzNHFyscFCgaL/xAAZAQEAAwEBAAAAAAAAAAAAAAAAAQIDBAX/xAAiEQEAAgEDBAMBAAAAAAAAAAAAAQIDERIxBBNBUSEiYTL/2gAMAwEAAhEDEQA/APrFiyLFmLZNiyLFgTYsixYE2LIsWBNiyLFgTYsixYE2LIsWBNiyLFgVsWQAlNiyABNhVREtVpCksjYo1fItNTmpwM3Nkynqlq2NOTfMxzZq44/V6Umzqz6pjxKqNVZF+3l4mq7WnX1IUrvccoHBbqsk8To3jFWHVbrTr68KV3ONqDVMeVURyrGv3cvE4AFeqyRzOpOKsvWIqKlotoLPO4WbJivRLV0a82+R34pGyxo+NbavJTvw5q5I/WF6TVexZANlE2LIAFQRYsCQRYsDla1OqvZCi7InE7+jmG7q6KmXapsrUow4eK/KerWKjURLVVPIzbrZZh100isMAOl7Hk+szwUex5PrM8FK9nJ6W3Q5oOl7Hk+szwUex5PrM8FHZyejdDmnT0WdUe+FV2VOJv8AZp5mK/FejXqjkVLRUM2kIq5domyNWy2HdXLEK30msu4CLFnruRIIsWBWxZFiwJsWRYsDW1DFXJhtie8Zunf3GTTYfQ4rUVKc7rOszs7S5z2pHc3Nqz9dAABIAANXUofTYrkRLc3rNox6firjQ29PeP3Xu7jeKP7BWkdzci0/XRFiyLFnQxTYsixYFbFlbFhK1iytiwMka9YymvZma7iSzO8eV6T4WABmuAAAYpF6xdzuFLMNmlI8qXnwmxZWxZootYsrYsCLFlQBaxZUxZWVDiQrNkyNjjTtUnkZ7MU+bj4aceRPHEn3uqzx+q9Kp5lWPARYY7/EX418jz0kj5Xq+V7nvXm5y2qnTTpZn+h9W0/UMXUYlkxJeNqO4V2VN/8AZtHiuheSz1ebGVyJIj+NEvdUo9Qkr05OU4stNl5q2idYbprZ2djYEPpsqTgZaJdXupjWV6/5Kec6Y5MbMBuOqoskj0dV7oidpGKm+8VJ+IehgzcfMTjx545U+x10ZbPlMcj4no+J7mPTk5q0qHodK6VTwqkeeizR3+Inxp5ndfpZrH1Yva2LMGLlQ5cKTY0jZI17UMpzcC1iyoIEAiyksjIo3SSORrGpblXsQkYtQzoNPxnT5DqRNmtTm5fkh8/1TUp9SyFlmWmp8DEXZqF9a1J+p5jpVtI27Rt+SeZoHoYcMUjWeUgANxaKR8MjZInuY9u6OatKh0k6Q6oiInrS7fNieRywUtStuYHUXpDqip+a/wCG+Rzp5pciRZJ5HSPXm5y2pQCtK14gAAXG5pepT6bkJLCttX42KuzkPoGn50GoYzZ8d1ouzmrzavyU+Zm/oupP0zMbKlrG7aRvzTzMM2GLxrHI+jAxxSMljbJG5HMcltVO1C9nnoVs850xzljx48Ni7y9Z/wC1Ozx/g9CfPteyPWdWyH3bUdwN/RNjfp6br6+hoAA9BIAAAAAAAAAAAAA9f0Ozlkx5MN67xdZn7V7PH+T0dnzzQcj1bVsd901XcDv0XY+gnn9RTbfX2h//2Q==',
-    'data:image/jpeg;base64,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',
-    'data:image/jpeg;base64,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',
-    'data:image/jpeg;base64,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',
-    'data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAAkGBwgHBgkIBwgKCgkLDRYPDQwMDRsUFRAWIB0iIiAdHx8kKDQsJCYxJx8fLT0tMTU3Ojo6Iys/RD84QzQ5Ojf/2wBDAQoKCg0MDRoPDxo3JR8lNzc3Nzc3Nzc3Nzc3Nzc3Nzc3Nzc3Nzc3Nzc3Nzc3Nzc3Nzc3Nzc3Nzc3Nzc3Nzc3Nzf/wAARCACAAIADASIAAhEBAxEB/8QAGwABAAIDAQEAAAAAAAAAAAAAAAECAwUGBAf/xAA0EAACAgIBAgMDCwQDAAAAAAAAAQIDBBEFBjESIVETIkEUFiNSVGFicZGSoQcyQtEVgaL/xAAZAQEBAQEBAQAAAAAAAAAAAAAAAwIBBAX/xAAgEQEAAgIBBQEBAAAAAAAAAAAAAQIDERIEITFBURMi/9oADAMBAAIRAxEAPwD6yCuxsgusCuxsCwK7GwLArsbAsCuxsCwK7GwLArsbAsCuxsCuxsgHBOxsgATsiUlGLlKSUV5tt6SMOZlU4eNZkZM1CqtblJnzPqDqDJ5i+SUpV4qfuUp9/vfqzF7xVTHim8uz5DrHi8ObhXKeTNd/ZL3f1ZprevrfF9Dx9aj+Oxt/wjjAQnLaXqjBSHZ1dfW+L6bj63H8FjT/AJRueP6x4vMmoWSnjTfb2q939UfMwIy2gnBSX2uMlKKlGScX5pp7TJ2fLOn+oMnh74pylZit+/S32+9ejPpmHlU5mNXkY01OqxbjJF6Xizy5MU0ln2NkA2mnY2QAKgjY2BII2NgcR/UHkJSvp4+DajBe0sXq32/g446LryE4865yi1GdUfC/XXc8HBcLfzN866ZRrjXHcpyW0vRHkvubS+hj1FIawHW/MTK+3UfskPmJlfbqP2SM8Zd/Sv1yQOt+YmV9uo/ZIfMTK+3UfskOMn6V+uSOx/p9yEo33cfNtxmvaVr0a7/waHneFv4a+Fd0o2RsjuM4rSfqj39BwnLnVOMW4wql4n6b7Gqbi0OZNWpL6OCNjZ63z0gjY2BXY2QAJ2NkADS9V8PLlcFSoSeTT70F9ZfGJk6TwPkHDUxlFxtt+ksTXmm/h+ht4liNo/ra9bTw0AAAAANN1ZgfL+GujGLlbV9JWkvNtfD9DH0pw8uKwXK9JZN3vTX1V8Im9KyFY/rZa08NGxsgFkE7GyABUEbGwJBGxsC8X5lzDsyxe1snePalJ9JABlsAAApJ+ZaT0tmLZuke2Lz6SCNjZtNII2NgV2NlQHVtjZUx5GRVjVO2+ahBfFgiNs2zHdl04q8V9sK1+J62cxyPUV1rcMNOqH13/c/9GlnOVk3OyTlJ93J7Zibw9VOmtPe3Z9Fws7Hzq3PGs8cU9Py15noOS6Xvh7G2jaU1LxJeqOgVti7SZNy9eNtPaYMzMowqvaZE/DHeu2zC7bH3kzSdTXwjhxpb3ZOSevuXxDlK8rabynLpyl4qLYWL8L3oybPnUJyrmp1ycZLs4vTN1x3UV1TUMxO2H11/cv8AZSLw1fprR3r3dXsbMOPkVZNStompwfxRkNvLrS2xsqAIBBWyca4SnNqMYrbb+CAx5uZVhUO656S7Jd5P0RxnIZ12fe7LXqP+MF2ii3KZ08/Kdj2q15Qj6I8ZK1tvo4cMUjc+QAGV1q5zrmp1ycZLs09NHtXM8glr5Q/+4o8ADk1ifMPf/wAzyH2j/wAo8Vttl03O2cpzfdyZUAisR4gAAderj867AvVlT3H/ACg+0kdnhZlWbQrqXtPun3i/RnBHs4vOngZSsW3W/KcfVGq20hmwxeNx5dwClc42QjODUoyW018UWKvnKmj6nzPBTDFg/Oz3p/kjdnF8xf8AKORvnvaUvCvyXkZvOoX6enK+/jxgAk+iAAAAAAAAAAAAAOl6YzPHTPFm/Ov3ofkzeHFcPf8AJ+RonvScvC/yfkdoVrO4fO6inG+/r//Z',
-    'data:image/jpeg;base64,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',
-    'data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAAkGBwgHBgkIBwgKCgkLDRYPDQwMDRsUFRAWIB0iIiAdHx8kKDQsJCYxJx8fLT0tMTU3Ojo6Iys/RD84QzQ5Ojf/2wBDAQoKCg0MDRoPDxo3JR8lNzc3Nzc3Nzc3Nzc3Nzc3Nzc3Nzc3Nzc3Nzc3Nzc3Nzc3Nzc3Nzc3Nzc3Nzc3Nzc3Nzf/wAARCACAAIADASIAAhEBAxEB/8QAHAABAAIDAQEBAAAAAAAAAAAAAAECAwUGBwQI/8QAORAAAQQBAgIDDAsBAQAAAAAAAQACAxEEBQYhMRJBUQcTFyIjMlJVcZGToRQVJEJhYmNygdHwU6L/xAAYAQEBAQEBAAAAAAAAAAAAAAAAAwIBBP/EAB0RAQACAgMBAQAAAAAAAAAAAAABAgMxERIhQTL/2gAMAwEAAhEDEQA/APV7S1W0tQXWtLVbS0FrS1W0tBa0tVtLQWtLVbS0FrS1W0tBa0tVtLQWtLVbS0FbS1Fpa4JtLUWloJtQ57WNLnuDWgWSTQC+fPzcfT8SXLy5BHDELc4/7mvHt07py9eyHNDnw4TT5OAHn+Lu0rkzw1Ws2eg6rv7RsB7o4XyZkjefeB4t/uPD3LQT90+cu+z6XEG/qSkn5BefIs9pVikPQYO6fOHfaNLiLf05SD8wt/pW/tGz3tjmfJhyO5d/Hi3+4cPevH0TtJOOH6Ia9r2hzHBzSLBBsFTa8V2tunL0HIa0ufNhOPlICeX4t7CvYcDNx9QxIsvEkEkMotrh/ua1E8pWrNX02lqLS11lNpai0tBW0tVtLQWtLVbS0HnPdT1Vz8nH0uNxDGN77KO0nzflfvXArrO6ZG9u5TI5pDHwM6DjydVgrVbb2/k7gyZIsd7YmRN6T5HgkDsHDrKnbb0V01CLufBrmessb4bk8GuZ6yxvhuWeXXDIu58GuZ6yxvhuTwa5nrLG+G5ORwy77uWaq5mTkaXI4lj299iHYR53yr3LmNybfydv5McWQ9srJW9JkjAQD2jj1hbXuZxvduUSNaSxkD+m4cm3QC1G3Lfl61aWq2lqjzrWlqtpaCLS1W0tdFrS1W0tBzu+NAdremh2M0HMxyXRj0x1t/3WsuyNL+q9vwNewtnm8rKHCiCeQ/gUt8FKjfa1PyIiLDQiIg0G99L+tNvztYwunh8rEGiySOY/kWsWx9Adomml2S0DMyCHSD0B1N/3WukUFbptm/5TaWq2lqyK1paraWgqii0tBKKLS0F2nirLFayNNhSyR9VpPxKIim2IiICq48VLjQWO1THH1i8/EootLVUkootLQRaWq2lo6taWq2seRkRY0RlnkDGDrKDNaxTZcOKOlPKyMfmNLmNR3HNKSzCBiZ6Z84/0tHI98jy+Rxc48y42VWMMztuKy9Gws7Hzoy/Gk6bQaPCuK+hcntadneZYLAeHdIDtFLfiWQcnFeTJXraYUfasGZmQYUXfMh/RbYHK1hMsh5uK0m5p2Nw2wkgyPcDXXQ60x17WiBvYcuHKHSglZIPym1ltebxvfG8PjcWuHItNFbzTtxzREMzQZWemPOH9r1zhmNJzWXWWlrDj5EWTEJYJA9h6wslqTC1paraWgi0tVtVkkbGxz3kNa0WSeoIMebmRYUBmmdQHIDm49gXF6jnzZ85klND7rByaFbVc9+flGQ2IxwY3sC+JenHTr7O1K14ERFRpaN74nh8bi1w5EGiF9w1nUAK+kH+Wha9FyaxO4Gw+utQ/7/8AkL4pZZJnl8r3PeeZcVREitY1AIiLo+vTs+bAnEkRsfeYeTgu0wsyLNgE0LrB5g82nsK4BfbpWe/AyhILMZ4Pb2hTyU7extm1eXdWlrHHI2RjXsIc1wsEdYVrXmTVtaPdGYWQsxWHjJ4z/YFu1xWsT/SNSnfdgO6LfYOCpijmzVY9fEiIvSoIiICIiAiIgIiICIiDp9r5hfC/FeeMfjM9hW8tcTo8/wBH1KB90C7ou9h4LtV5sscWTtHr/9k='
-  ];
-  const workers = workerNames.map((name, i) => ({
-    id: 'demo_w' + (i+1), name, email: 'worker' + (i+1) + '@demo.jobbr', password: 'demo1234', role: 'worker',
-    avatar: workerAvatars[i],
-    phone: '+61 4' + String(10+i) + ' ' + String(100+i*11) + ' ' + String(200+i*13),
-    cpr: '000 000 ' + String(100+i*111),
-    address: (i+1)*10 + ' Collins Street, Melbourne VIC 3000',
-    cv: { headline:'', summary:'', skills:'', pastEmployment: [], education:'' },
-  }));
-  workers[0].cv = { headline:'Experienced barista and café allrounder', summary:'Friendly, reliable, and quick behind the counter. Comfortable talking to customers during a rush.', skills:'Coffee, Customer service, POS systems, Cleaning',
-    education:'Year 12, Richmond Secondary College (2023)\nResponsible Service of Alcohol (RSA) Certificate',
-    pastEmployment: [
-      { company:'Sunrise Bakery', role:'Bakery assistant', from: addMonthsISO(60), to: addMonthsISO(54), description:'Prepped ingredients and served customers during the morning rush.' },
-      { company:'Woolworths Richmond', role:'Checkout operator', from: addMonthsISO(48), to: addMonthsISO(42), description:'Handled cash and card transactions, restocked shelves during quiet periods.' },
-      { company:'The Lygten Restaurant', role:'Kitchen hand', from: addMonthsISO(36), to: addMonthsISO(30), description:'Supported the kitchen team with prep, plating, and cleaning during service.' },
-      { company:'Metro Event Crew', role:'Event helper', from: addMonthsISO(12), to: addMonthsISO(6), description:'Set up and staffed stalls at local markets and community events.' },
-    ] };
-  workers[3].cv = { headline:'Detail-oriented cleaner and stock helper', summary:'Prefers hands-on, physical work with clear instructions.', skills:'Deep cleaning, Inventory, Heavy lifting',
-    education:'Certificate II in Hospitality (2022)',
-    pastEmployment: [
-      { company:'Comfort Inn Melbourne', role:'Housekeeping attendant', from: addMonthsISO(24), to: addMonthsISO(12), description:'Cleaned and prepared guest rooms to hotel standard on a daily roster.' },
-    ] };
-
-  // Historic businesses James worked for — defined here so saveUsers includes them all
-  const bizC = { id:'demo_biz_c', banner: BIZ_BANNERS[2], name:'The Lygten Restaurant', email:'demo@thelygt.com.au', password:'demo1234', role:'business', avatar: 'data:image/svg+xml;utf8,%3Csvg%20xmlns%3D%22http%3A//www.w3.org/2000/svg%22%20viewBox%3D%220%200%20100%20100%22%3E%3Crect%20width%3D%22100%22%20height%3D%22100%22%20fill%3D%22%232D7045%22/%3E%3Cpath%20d%3D%22M22%2082V44l28-20%2028%2020v38z%22%20fill%3D%22none%22%20stroke%3D%22rgba%28255%2C255%2C255%2C0.95%29%22%20stroke-width%3D%224%22%20stroke-linejoin%3D%22round%22/%3E%3Crect%20x%3D%2238%22%20y%3D%2258%22%20width%3D%2224%22%20height%3D%2224%22%20fill%3D%22rgba%28255%2C255%2C255%2C0.95%29%22/%3E%3Crect%20x%3D%2227%22%20y%3D%2252%22%20width%3D%2210%22%20height%3D%2210%22%20fill%3D%22rgba%28255%2C255%2C255%2C0.95%29%22/%3E%3Crect%20x%3D%2263%22%20y%3D%2252%22%20width%3D%2210%22%20height%3D%2210%22%20fill%3D%22rgba%28255%2C255%2C255%2C0.95%29%22/%3E%3C/svg%3E', about:'Classic Australian restaurant in the heart of Melbourne.' };
-  const bizD = { id:'demo_biz_d', banner: BIZ_BANNERS[3], name:'Central Warehouse & Logistics', email:'demo@centralwarehouse.com.au', password:'demo1234', role:'business', avatar: 'data:image/svg+xml;utf8,%3Csvg%20xmlns%3D%22http%3A//www.w3.org/2000/svg%22%20viewBox%3D%220%200%20100%20100%22%3E%3Crect%20width%3D%22100%22%20height%3D%22100%22%20fill%3D%22%237D3C98%22/%3E%3Cpath%20d%3D%22M22%2082V44l28-20%2028%2020v38z%22%20fill%3D%22none%22%20stroke%3D%22rgba%28255%2C255%2C255%2C0.95%29%22%20stroke-width%3D%224%22%20stroke-linejoin%3D%22round%22/%3E%3Crect%20x%3D%2238%22%20y%3D%2258%22%20width%3D%2224%22%20height%3D%2224%22%20fill%3D%22rgba%28255%2C255%2C255%2C0.95%29%22/%3E%3Crect%20x%3D%2227%22%20y%3D%2252%22%20width%3D%2210%22%20height%3D%2210%22%20fill%3D%22rgba%28255%2C255%2C255%2C0.95%29%22/%3E%3Crect%20x%3D%2263%22%20y%3D%2252%22%20width%3D%2210%22%20height%3D%2210%22%20fill%3D%22rgba%28255%2C255%2C255%2C0.95%29%22/%3E%3C/svg%3E', about:'Warehouse and logistics work, flexible hours.' };
-  const bizE = { id:'demo_biz_e', banner: BIZ_BANNERS[4], name:'Metro Event Crew', email:'demo@metroeventcrew.com.au', password:'demo1234', role:'business', avatar: 'data:image/svg+xml;utf8,%3Csvg%20xmlns%3D%22http%3A//www.w3.org/2000/svg%22%20viewBox%3D%220%200%20100%20100%22%3E%3Crect%20width%3D%22100%22%20height%3D%22100%22%20fill%3D%22%23C0392B%22/%3E%3Cpath%20d%3D%22M22%2082V44l28-20%2028%2020v38z%22%20fill%3D%22none%22%20stroke%3D%22rgba%28255%2C255%2C255%2C0.95%29%22%20stroke-width%3D%224%22%20stroke-linejoin%3D%22round%22/%3E%3Crect%20x%3D%2238%22%20y%3D%2258%22%20width%3D%2224%22%20height%3D%2224%22%20fill%3D%22rgba%28255%2C255%2C255%2C0.95%29%22/%3E%3Crect%20x%3D%2227%22%20y%3D%2252%22%20width%3D%2210%22%20height%3D%2210%22%20fill%3D%22rgba%28255%2C255%2C255%2C0.95%29%22/%3E%3Crect%20x%3D%2263%22%20y%3D%2252%22%20width%3D%2210%22%20height%3D%2210%22%20fill%3D%22rgba%28255%2C255%2C255%2C0.95%29%22/%3E%3C/svg%3E', about:'We staff festivals, markets, and corporate events across Victoria.' };
-
-  DB.saveUsers([bizA, bizB, bizC, bizD, bizE].concat(workers));
-  const w = (n) => workers[n-1];
-
-  DB.saveTeamApps([
-    { id: uid('ta'), workerId: w(1).id, workerName: w(1).name, businessId: bizA.id, businessName: bizA.name, status: 'accepted' },
-    { id: uid('ta'), workerId: w(4).id, workerName: w(4).name, businessId: bizA.id, businessName: bizA.name, status: 'accepted' },
-    { id: uid('ta'), workerId: w(5).id, workerName: w(5).name, businessId: bizA.id, businessName: bizA.name, status: 'accepted' },
-    { id: uid('ta'), workerId: w(8).id, workerName: w(8).name, businessId: bizA.id, businessName: bizA.name, status: 'accepted' },
-    { id: uid('ta'), workerId: w(2).id, workerName: w(2).name, businessId: bizA.id, businessName: bizA.name, status: 'pending' },
-    { id: uid('ta'), workerId: w(6).id, workerName: w(6).name, businessId: bizA.id, businessName: bizA.name, status: 'pending' },
-    { id: uid('ta'), workerId: w(3).id, workerName: w(3).name, businessId: bizA.id, businessName: bizA.name, status: 'invited' },
-    { id: uid('ta'), workerId: w(9).id, workerName: w(9).name, businessId: bizB.id, businessName: bizB.name, status: 'accepted' },
-    { id: uid('ta'), workerId: w(10).id, workerName: w(10).name, businessId: bizB.id, businessName: bizB.name, status: 'accepted' },
-    { id: uid('ta'), workerId: w(2).id, workerName: w(2).name, businessId: bizB.id, businessName: bizB.name, status: 'pending' },
-    { id: uid('ta'), workerId: w(1).id, workerName: w(1).name, businessId: bizB.id, businessName: bizB.name, status: 'accepted' },
-    { id: uid('ta'), workerId: w(1).id, workerName: w(1).name, businessId: bizC.id, businessName: bizC.name, status: 'accepted' },
-    { id: uid('ta'), workerId: w(1).id, workerName: w(1).name, businessId: bizD.id, businessName: bizD.name, status: 'accepted' },
-    { id: uid('ta'), workerId: w(1).id, workerName: w(1).name, businessId: bizE.id, businessName: bizE.name, status: 'accepted' },
-  ]);
-
-  // Helper: job with a completed shift by James on a past date
-  const shiftTimes = [['08:00','14:00'],['09:00','15:00'],['14:00','21:00'],['16:00','23:00'],['07:00','13:00'],['10:00','16:00'],['12:00','18:00']];
-  let _stIdx = 0;
-  function pastJob(biz, title, daysAgo, payout){
-    const d = new Date(); d.setDate(d.getDate() - daysAgo);
-    const date = d.toISOString().slice(0,10);
-    const [shiftStart, shiftEnd] = shiftTimes[_stIdx++ % shiftTimes.length];
-    return { id: uid('j'), businessId: biz.id, businessName: biz.name, title, description: '',
-      pay: payout + ' AUD', payAmount: payout, payType: 'flat', payHours: null, payout, date,
-      shiftStart, shiftEnd, breakMins: 30,
-      location: 'Melbourne', slotsNeeded: 1, status: 'completed', postedAt: d.getTime(),
-      takenBy: [ { workerId: w(1).id, workerName: w(1).name, status: 'completed' } ] };
-  }
-
-  const _postedAt = (iso, offsetH) => new Date(iso + 'T09:00:00').getTime() - (offsetH||0)*3600000;
-  DB.saveJobs([
-    // ─── Current / upcoming jobs ───────────────────────────────────────────
-    { id: uid('j'), businessId: bizA.id, businessName: bizA.name, title: 'Weekend brunch shift', description: 'Serve tables and help behind the counter during our busiest brunch hours.',
-      pay: '$14/hr · 5h ≈ $70', payAmount: 14, payType: 'hourly', payHours: 5, payout: 70, date: addDaysISO(3), location: 'Harbour Café, Melbourne', slotsNeeded: 2, status: 'open', postedAt: Date.now() - Math.floor(Math.random()*86400000*5), shiftStart: '10:00', shiftEnd: '15:00', breakMins: 30,
-      takenBy: [ { workerId: w(1).id, workerName: w(1).name, status: 'taken' } ] },
-    { id: uid('j'), businessId: bizA.id, businessName: bizA.name, title: 'Christmas market stall', description: 'Run our pop-up stall selling coffee and pastries at the town square market.',
-      pay: '$13/hr · 4h ≈ $52', payAmount: 13, payType: 'hourly', payHours: 4, payout: 52, date: addDaysISO(10), location: 'Melbourne Market', slotsNeeded: 3, status: 'open', postedAt: Date.now() - Math.floor(Math.random()*86400000*5), shiftStart: '11:00', shiftEnd: '15:00', breakMins: 0,
-      takenBy: [ { workerId: w(1).id, workerName: w(1).name, status: 'taken' }, { workerId: w(5).id, workerName: w(5).name, status: 'taken' } ] },
-    { id: uid('j'), businessId: bizA.id, businessName: bizA.name, title: 'Inventory count', description: 'Count and log all stockroom inventory against the system.',
-      pay: '$65', payAmount: 65, payType: 'flat', payHours: null, payout: 65, date: addDaysISO(-1), location: 'Harbour Café stockroom, Melbourne', slotsNeeded: 1, status: 'filled', postedAt: Date.now() - Math.floor(Math.random()*86400000*5),
-      takenBy: [ { workerId: w(8).id, workerName: w(8).name, status: 'taken' } ] },
-    { id: uid('j'), businessId: bizA.id, businessName: bizA.name, title: 'Deliver flyers around town', description: 'Hand-deliver flyers for our spring menu to shops along the main street.',
-      pay: '$45', payAmount: 45, payType: 'flat', payHours: null, payout: 45, date: addDaysISO(4), location: 'Melbourne city centre', slotsNeeded: 1, status: 'open', postedAt: Date.now() - Math.floor(Math.random()*86400000*5), takenBy: [] },
-    { id: uid('j'), businessId: bizB.id, businessName: bizB.name, title: 'Roof repair helper', description: 'Assist our roofer with materials and cleanup on a residential job.',
-      pay: '$15/hr · 6h ≈ $90', payAmount: 15, payType: 'hourly', payHours: 6, payout: 90, date: addDaysISO(7), location: 'Richmond', slotsNeeded: 2, status: 'open', postedAt: Date.now() - Math.floor(Math.random()*86400000*5),
-      takenBy: [ { workerId: w(9).id, workerName: w(9).name, status: 'taken' } ] },
-    { id: uid('j'), businessId: bizB.id, businessName: bizB.name, title: 'Delivery driver for a day', description: 'Deliver building materials to three sites around town.',
-      pay: '$80', payAmount: 80, payType: 'flat', payHours: null, payout: 80, date: addDaysISO(2), location: 'Melbourne', slotsNeeded: 1, status: 'filled', postedAt: Date.now() - Math.floor(Math.random()*86400000*5),
-      takenBy: [ { workerId: w(10).id, workerName: w(10).name, status: 'taken' } ] },
-    { id: uid('j'), businessId: bizA.id, businessName: bizA.name, title: 'Evening cleanup crew', description: 'Deep clean the kitchen and dining area after closing.',
-      pay: '$55', payAmount: 55, payType: 'flat', payHours: null, payout: 55, date: addDaysISO(-5), location: 'Harbour Café, Melbourne', slotsNeeded: 1, status: 'completed', postedAt: Date.now() - Math.floor(Math.random()*86400000*5),
-      takenBy: [ { workerId: w(4).id, workerName: w(4).name, status: 'completed' } ] },
-
-    // ─── James's 3 years of completed paid history ────────────────────────
-    // Year 1 ago — Harbour Café (varied shifts)
-    pastJob(bizA,'Sunday shift — service',  14,  85),
-    pastJob(bizA,'Morning shift — setup',   28,  70),
-    pastJob(bizA,'Evening shift café',          42,  90),
-    pastJob(bizA,'Saturday brunch',             60,  95),
-    pastJob(bizA,'Cleanup after event',      75,  50),
-    pastJob(bizA,'Market stall — town square',     90,  80),
-    pastJob(bizA,'Extra shift — New Year',      105,  120),
-    pastJob(bizA,'Monday shift',              120,  75),
-    pastJob(bizA,'Lunch session',           135,  65),
-    pastJob(bizA,'Friday shift',              150,  90),
-    pastJob(bizA,'Weekend shift',              170,  85),
-    pastJob(bizA,'Summer market',             185,  80),
-
-    // The Lygten Restaurant
-    pastJob(bizC,'Kitchen help — dinner service',  50,  110),
-    pastJob(bizC,'Dishwashing and prep',           80,  80),
-    pastJob(bizC,'Extra chef for large party',  110,  130),
-    pastJob(bizC,'Lunch buffet help',           140,  90),
-    pastJob(bizC,'New Year dinner service',          200,  130),
-    pastJob(bizC,'Sunday lunch',                230,  95),
-    pastJob(bizC,'Christmas lunch help',              260,  130),
-
-    // Richmond Lager
-    pastJob(bizD,'Stocktake',               55,  90),
-    pastJob(bizD,'Unloading — large truck',      85,  105),
-    pastJob(bizD,'Packing help campaign day',        115,  80),
-    pastJob(bizD,'Night warehouse sorting',            145,  120),
-    pastJob(bizD,'Inventory scanning',             175,  75),
-    pastJob(bizD,'Christmas packing extra',            210,  110),
-    pastJob(bizD,'Freight sorting',                240,  85),
-
-    // Year 2 ago
-    pastJob(bizA,'Brunch shift — high season',      365,  95),
-    pastJob(bizA,'Event help — harbour festival',        395,  110),
-    pastJob(bizA,'Closing time cleanup',            420,  55),
-    pastJob(bizA,'Weekend shift — terrassen',       450,  90),
-    pastJob(bizC,'Party night — 50 guests',     380,  130),
-    pastJob(bizC,'Catering delivery to conference',     410,  80),
-    pastJob(bizD,'Large delivery — building materials',  440,  105),
-    pastJob(bizD,'Warehouse inventory day 2',          460,  90),
-    pastJob(bizE,'Festival guests — backstage',    370,  130),
-    pastJob(bizE,'Trade stand setup',         400,  75),
-    pastJob(bizE,'Event management — TASSQR Launch', 430,  90),
-    pastJob(bizE,'Teardown and cleanup',       455,  60),
-
-    // Year 3 ago
-    pastJob(bizA,'Season start — shift',             700,  85),
-    pastJob(bizA,'Saturday night café',                730,  95),
-    pastJob(bizC,'Restaurant help summer',        710,  120),
-    pastJob(bizC,'Winter menu season start',         760,  90),
-    pastJob(bizD,'New hire onboarding day',  720,  70),
-    pastJob(bizD,'Q4 stocktake',             750,  110),
-    pastJob(bizE,'Summer party — large event',       715,  130),
-    pastJob(bizE,'Christmas market ops',                780,  80),
-    pastJob(bizB,'Construction site help day 1',         725,  95),
-    pastJob(bizB,'Materials delivery run',               740,  90),
-    pastJob(bizB,'Construction site cleanup',          760,  70),
-  ]);
-
-  DB.saveTasks([
-    { id: uid('t'), businessId: bizA.id, businessName: bizA.name, workerId: w(1).id, workerName: w(1).name, title: 'Restock pastry case', description: 'Fill the display case before opening on Saturday.', status: 'pending' },
-    { id: uid('t'), businessId: bizA.id, businessName: bizA.name, workerId: w(4).id, workerName: w(4).name, title: 'Submit cleanup photos', description: 'Send before/after photos of the kitchen.', status: 'completed' },
-    { id: uid('t'), businessId: bizA.id, businessName: bizA.name, workerId: w(8).id, workerName: w(8).name, title: 'Label new inventory', description: 'Print and attach barcodes to the new stock.', status: 'pending' },
-  ]);
-
-  const now = Date.now();
-  DB.saveMessages([
-    { id: uid('m'), conversationId: convId(bizA.id, w(1).id), fromId: bizA.id, fromName: bizA.name, toId: w(1).id, toName: w(1).name, text: 'Hi James, thanks for taking the brunch shift Saturday!', ts: now - 1000*60*60*20 },
-    { id: uid('m'), conversationId: convId(bizA.id, w(1).id), fromId: w(1).id, fromName: w(1).name, toId: bizA.id, toName: bizA.name, text: 'No problem, see you then :)', ts: now - 1000*60*60*19 },
-    { id: uid('m'), conversationId: convId(w(1).id, w(5).id), fromId: w(5).id, fromName: w(5).name, toId: w(1).id, toName: w(1).name, text: 'Hey, are you doing the market stall shift too?', ts: now - 1000*60*60*5 },
-    { id: uid('m'), conversationId: convId(w(1).id, w(5).id), fromId: w(1).id, fromName: w(1).name, toId: w(5).id, toName: w(5).name, text: 'Yep! Should be a fun one.', ts: now - 1000*60*60*4 },
-  ]);
-
-  DB.saveActivities([
-    { id: uid('a'), userId: bizA.id, icon:'mail', text: w(2).name + ' applied to join your team', ts: now - 1000*60*60*30 },
-    { id: uid('a'), userId: bizA.id, icon:'check', text: 'You accepted ' + w(1).name + ' onto your team', ts: now - 1000*60*60*28 },
-    { id: uid('a'), userId: w(1).id, icon:'check', text: 'You are now on the ' + bizA.name + ' team!', ts: now - 1000*60*60*28 },
-    { id: uid('a'), userId: bizA.id, icon:'check', text: w(4).name + ' completed the task "Submit cleanup photos"', ts: now - 1000*60*60*24 },
-    { id: uid('a'), userId: w(1).id, icon:'folder', text: bizA.name + ' assigned you a task: "Restock pastry case"', ts: now - 1000*60*60*10 },
-    { id: uid('a'), userId: w(3).id, icon:'mail', text: bizA.name + ' invited you to join their team', ts: now - 1000*60*60*6 },
-  ]);
-
-  localStorage.setItem('ty_seeded_v12', '1');
-}
 
 // ================= CALENDAR =================
 let calViewYear = new Date().getFullYear();
@@ -3544,14 +3463,19 @@ setInterval(() => {
 }, 60000);
 
 // ---------- Boot ----------
-(function boot(){
-  const session = DB.session();
-  if(session){
-    const user = DB.users().find(u => u.id === session.userId);
-    if(user){ enterApp(user); return; }
-  }
+(async function boot(){
   setRole('worker');
   setMode('login');
+
+  const { data: { session } } = await sb.auth.getSession();
+  if(session){
+    const { data: profile, error } = await sb.from('profiles').select('*').eq('id', session.user.id).single();
+    if(profile && !error){
+      await loadAllData();
+      enterApp(toCamelCase(profile));
+      return;
+    }
+  }
 })();
 </script>
 </body>
