@@ -26,7 +26,7 @@
   input, select, textarea{ font-family:inherit; }
   :focus-visible{ outline:3px solid #9FB0A5; outline-offset:2px; }
 
-  .frame{ max-width:420px; margin:0 auto; height:100vh; height:100dvh; background:var(--paper); display:flex; flex-direction:column; position:relative; border-left:1px solid var(--border); border-right:1px solid var(--border); }
+  .frame{ max-width:420px; margin:0 auto; height:100vh; height:100dvh; background:var(--paper); display:flex; flex-direction:column; position:relative; border-left:1px solid var(--border); border-right:1px solid var(--border); min-height:0; }
   @media (min-width:520px){
     body{ display:flex; align-items:center; justify-content:center;
           min-height:100vh; min-height:100dvh; padding:24px 0; }
@@ -57,7 +57,9 @@
   .logout-btn{ background:none;border:1px solid rgba(240,228,204,0.28);color:var(--paper); font-size:11.5px; padding:6px 9px; border-radius:var(--radius-s); cursor:pointer; flex-shrink:0; white-space:nowrap; }
   .logout-btn:hover{ background:rgba(255,255,255,0.10); }
 
-  .content{ flex:1; padding:22px 20px 40px; overflow-y:auto; background:var(--paper); -webkit-overflow-scrolling:touch; }
+  .content{ flex:1; min-height:0; padding:22px 20px 40px; overflow-y:auto; background:var(--paper); -webkit-overflow-scrolling:touch;
+    scrollbar-width:none; -ms-overflow-style:none; touch-action:pan-y; overscroll-behavior:contain; }
+  .content::-webkit-scrollbar{ display:none; }
   .section-label{ font-size:10.5px; font-weight:800; color:var(--navy); text-transform:uppercase; letter-spacing:0.12em; margin:8px 0 16px; }
   .section-sub{ font-size:12.5px; color:var(--ink-soft); margin:-8px 0 14px; line-height:1.5; }
 
@@ -221,7 +223,9 @@
 
   .modal-overlay{ position:fixed; inset:0; background:rgba(28,27,24,0.45); display:flex; align-items:flex-end; justify-content:center; z-index:50; }
   @media (min-width:520px){ .modal-overlay{ align-items:center; padding:20px; } }
-  .modal-panel{ background:var(--paper); width:100%; max-width:460px; max-height:90vh; overflow-y:auto; border-radius:22px 22px 0 0; padding:24px 22px calc(22px + env(safe-area-inset-bottom)); }
+  .modal-panel{ background:var(--paper); width:100%; max-width:460px; max-height:90vh; overflow-y:auto; border-radius:22px 22px 0 0; padding:24px 22px calc(22px + env(safe-area-inset-bottom));
+    scrollbar-width:none; -ms-overflow-style:none; -webkit-overflow-scrolling:touch; }
+  .modal-panel::-webkit-scrollbar{ display:none; }
   @media (min-width:520px){ .modal-panel{ border-radius:var(--radius-m); } }
   .modal-panel.tall{ max-height:92vh; display:flex; flex-direction:column; }
   .modal-header{ display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:14px; gap:10px; }
@@ -250,7 +254,11 @@
   .empty .icon{ font-size:26px; margin-bottom:10px; }
   .empty .msg{ font-size:14px; line-height:1.5; }
 
-  .auth-wrap{ flex:1; display:flex; flex-direction:column; justify-content:center; padding:32px 28px; }
+  .auth-wrap{ flex:1; display:flex; flex-direction:column; padding:32px 28px calc(100px + env(safe-area-inset-bottom, 0px));
+    overflow-y:auto; -webkit-overflow-scrolling:touch; touch-action:pan-y; overscroll-behavior:contain;
+    scrollbar-width:none; -ms-overflow-style:none; }
+  .auth-wrap::-webkit-scrollbar{ display:none; }
+  #auth-screen{ height:100%; min-height:0; display:flex; flex-direction:column; }
   .auth-hero{ text-align:left; margin-bottom:26px; }
   .auth-hero .mark{ display:block; margin-bottom:22px; }
   .auth-hero h1{ font-size:26px; line-height:1.15; margin-bottom:8px; }
@@ -262,6 +270,12 @@
   .auth-form-toggle button{ background:none; border:none; cursor:pointer; padding:0 0 12px; font-size:14.5px; font-weight:600; color:var(--ink-soft); border-bottom:2px solid transparent; margin-bottom:-1px; }
   .auth-form-toggle button.active{ color:var(--navy-deep); border-bottom-color:var(--amber); }
   .error-msg{ background:var(--red-bg); color:var(--red); font-size:13px; padding:10px 12px; border-radius:var(--radius-s); margin-bottom:14px; }
+  #save-error-toast{ position:fixed; left:50%; bottom:90px; transform:translateX(-50%); z-index:999; background:var(--red); color:#fff;
+    font-size:13px; font-weight:600; padding:11px 18px; border-radius:999px; box-shadow:0 4px 16px rgba(0,0,0,0.25);
+    max-width:88%; text-align:center; }
+  #save-success-toast{ position:fixed; left:50%; bottom:90px; transform:translateX(-50%); z-index:999; background:var(--green); color:#fff;
+    font-size:13px; font-weight:600; padding:11px 18px; border-radius:999px; box-shadow:0 4px 16px rgba(0,0,0,0.25);
+    max-width:88%; text-align:center; }
   .success-msg{ background:var(--green-bg); color:var(--green); font-size:13px; padding:10px 12px; border-radius:var(--radius-s); margin-bottom:14px; }
   .demo-note{ margin-top:20px; font-size:12px; color:var(--ink-soft); text-align:center; line-height:1.5; }
   .preview-divider{ display:flex; align-items:center; gap:10px; margin:22px 0 14px; font-size:11.5px; color:var(--ink-soft); text-transform:uppercase; letter-spacing:0.04em; }
@@ -312,7 +326,9 @@
   .inbox-snippet{ font-size:12.5px; color:var(--ink-soft); margin-top:2px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
   .inbox-time{ font-size:11px; color:var(--ink-soft); flex-shrink:0; }
 
-  .thread-list{ flex:1; overflow-y:auto; display:flex; flex-direction:column; gap:8px; padding:4px 0 14px; }
+  .thread-list{ flex:1; overflow-y:auto; display:flex; flex-direction:column; gap:8px; padding:4px 0 14px;
+    scrollbar-width:none; -ms-overflow-style:none; }
+  .thread-list::-webkit-scrollbar{ display:none; }
   .bubble{ max-width:78%; padding:9px 12px; border-radius:14px; font-size:13.5px; line-height:1.4; }
   .bubble.mine{ align-self:flex-end; background:var(--navy); color:#fff; border-bottom-right-radius:4px; }
   .bubble.theirs{ align-self:flex-start; background:#EDE5D4; color:var(--ink); border-bottom-left-radius:4px; }
@@ -388,6 +404,8 @@
 </style>
 </head>
 <body>
+<div id="save-error-toast" class="hidden"></div>
+<div id="save-success-toast" class="hidden"></div>
 
 <div class="frame" id="frame">
 
@@ -476,11 +494,7 @@
         <!-- Seeker post — worker advertises themselves to businesses -->
         <div id="seeker-post-section" style="margin-top:20px;">
           <div class="section-label">Want businesses to find you?</div>
-          <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-m);padding:16px 18px;">
-            <div style="font-weight:600;margin-bottom:4px;">Advertise your availability</div>
-            <div style="font-size:13px;color:var(--ink-soft);margin-bottom:12px;">Post a short ad so businesses on TASSQR can find and invite you to their team.</div>
-            <button class="btn btn-outline" onclick="openSeekerPost()">+ Let businesses know I'm available</button>
-          </div>
+          <div id="my-seeker-ad"></div>
         </div>
       </div>
 
@@ -526,9 +540,9 @@
       <!-- WORKER: Payment -->
       <div id="view-payment" class="hidden">
         <div class="section-label">Your pay</div>
-        <div style="display:flex;gap:8px;margin-bottom:14px;">
-          <div style="flex:1;"><label style="font-size:11.5px;font-weight:600;color:var(--ink-soft);display:block;margin-bottom:4px;">From</label><input type="date" id="pay-from" onchange="renderPayment()" style="width:100%;padding:8px 8px;border:1px solid var(--border);border-radius:var(--radius-s);font-size:13px;"></div>
-          <div style="flex:1;"><label style="font-size:11.5px;font-weight:600;color:var(--ink-soft);display:block;margin-bottom:4px;">To</label><input type="date" id="pay-to" onchange="renderPayment()" style="width:100%;padding:8px 8px;border:1px solid var(--border);border-radius:var(--radius-s);font-size:13px;"></div>
+        <div style="display:flex;gap:6px;margin-bottom:14px;">
+          <div style="flex:1;min-width:0;"><label style="font-size:10.5px;font-weight:600;color:var(--ink-soft);display:block;margin-bottom:4px;">From</label><input type="date" id="pay-from" onchange="renderPayment()" style="width:100%;max-width:100%;box-sizing:border-box;padding:7px 5px;border:1px solid var(--border);border-radius:var(--radius-s);font-size:11.5px;"></div>
+          <div style="flex:1;min-width:0;"><label style="font-size:10.5px;font-weight:600;color:var(--ink-soft);display:block;margin-bottom:4px;">To</label><input type="date" id="pay-to" onchange="renderPayment()" style="width:100%;max-width:100%;box-sizing:border-box;padding:7px 5px;border:1px solid var(--border);border-radius:var(--radius-s);font-size:11.5px;"></div>
         </div>
         <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:18px;">
           <span id="pay-range-label" class="hint" style="margin:0;"></span>
@@ -710,14 +724,28 @@ function toSnakeCase(obj){
   const out = {};
   for(const k in obj){
     if(k === 'takenBy') continue; // not a real column — synced separately
-    out[k.replace(/([A-Z])/g, m => '_' + m.toLowerCase())] = obj[k];
+    const snakeKey = k.replace(/([A-Z])/g, m => '_' + m.toLowerCase());
+    let val = obj[k];
+    // Date/time columns need a real date format, not a raw millisecond number
+    if(typeof val === 'number' && (snakeKey === 'ts' || snakeKey.endsWith('_at'))){
+      val = new Date(val).toISOString();
+    }
+    out[snakeKey] = val;
   }
   return out;
 }
 function toCamelCase(obj){
   const out = {};
   for(const k in obj){
-    out[k.replace(/_([a-z])/g, (_, c) => c.toUpperCase())] = obj[k];
+    const camelKey = k.replace(/_([a-z])/g, (_, c) => c.toUpperCase());
+    let val = obj[k];
+    // Date/time columns come back as text (e.g. "2026-09-22T10:15:05Z") —
+    // convert to a plain number so the rest of the app (built around
+    // Date.now()-style numbers) keeps working exactly as before.
+    if(typeof val === 'string' && (k === 'ts' || k.endsWith('_at')) && !isNaN(Date.parse(val))){
+      val = new Date(val).getTime();
+    }
+    out[camelKey] = val;
   }
   return out;
 }
@@ -770,22 +798,41 @@ async function loadAllData(){
   _cache.holiday_pay = holidayPay.data || [];
 }
 
+let _toastTimer = null;
+function showSaveError(msg){
+  const el = document.getElementById('save-error-toast');
+  if(!el) return;
+  el.textContent = "Couldn't save: " + msg;
+  el.classList.remove('hidden');
+  clearTimeout(_toastTimer);
+  _toastTimer = setTimeout(() => el.classList.add('hidden'), 6000);
+}
+let _successToastTimer = null;
+function showSuccessToast(msg){
+  const el = document.getElementById('save-success-toast');
+  if(!el) return;
+  el.textContent = '✓ ' + msg;
+  el.classList.remove('hidden');
+  clearTimeout(_successToastTimer);
+  _successToastTimer = setTimeout(() => el.classList.add('hidden'), 4500);
+}
+
 // Save one row for real, in the background. The screen has already
 // updated from the local cache by the time this finishes.
 async function upsertRow(table, camelObj){
   const { error } = await sb.from(table).upsert(toSnakeCase(camelObj));
-  if(error) console.error('TASSQR: could not save to ' + table + ' —', error.message);
+  if(error){ console.error('TASSQR: could not save to ' + table + ' —', error.message); showSaveError(error.message); }
 }
 async function deleteRow(table, id){
   const { error } = await sb.from(table).delete().eq('id', id);
-  if(error) console.error('TASSQR: could not delete from ' + table + ' —', error.message);
+  if(error){ console.error('TASSQR: could not delete from ' + table + ' —', error.message); showSaveError(error.message); }
 }
 async function syncAssignmentsForJob(jobId, takenBy){
   await sb.from('job_assignments').delete().eq('job_id', jobId);
   if(takenBy && takenBy.length){
     const rows = takenBy.map(t => toSnakeCase(Object.assign({}, t, { jobId })));
     const { error } = await sb.from('job_assignments').insert(rows);
-    if(error) console.error('TASSQR: could not save shift assignments —', error.message);
+    if(error){ console.error('TASSQR: could not save shift assignments —', error.message); showSaveError(error.message); }
   }
 }
 
@@ -841,7 +888,7 @@ const DB = {
 function normalizeJob(j){
   return Object.assign({ slotsNeeded: 1, takenBy: [], status: 'open', payAmount:0, payType:'flat', payHours:null, payout:0, date:'' }, j);
 }
-function uid(prefix){ return prefix + '_' + Math.random().toString(36).slice(2,10); }
+function uid(prefix){ return crypto.randomUUID(); }
 function escapeHtml(str){
   const div = document.createElement('div');
   div.textContent = str == null ? '' : str;
@@ -974,6 +1021,10 @@ async function handleAuthSubmit(e){
 
       const { data, error } = await sb.auth.signUp({ email, password });
       if(error){ showAuthError(error.message); return; }
+      if(!data.session){
+        showAuthError('Account created! Check your email for a confirmation link, then come back and log in.');
+        return;
+      }
       const userId = data.user.id;
 
       const newProfile = { id: userId, name, email, role: authRole, cv: { headline:'', summary:'', skills:'', pastEmployment: [], education:'' } };
@@ -1074,6 +1125,18 @@ function showView(view){
   });
   document.getElementById('content').scrollTop = 0;
 
+  renderCurrentView(view);
+  refreshTopbarBadges();
+
+  // Pull the latest data in the background (someone else may have applied,
+  // accepted, posted, or messaged since we last loaded) and re-render
+  // this same view in place once it arrives — the screen doesn't jump or flicker.
+  loadAllData().then(() => {
+    if(currentView === view) renderCurrentView(view);
+    refreshTopbarBadges();
+  });
+}
+function renderCurrentView(view){
   if(view === 'find') renderFind();
   if(view === 'work') renderWork();
   if(view === 'activity-worker') renderActivity('activity-worker-list');
@@ -1085,7 +1148,6 @@ function showView(view){
   if(view === 'activity-biz') renderActivity('activity-biz-list');
   if(view === 'calendar-biz') renderCalendar('biz');
   if(view === 'payroll') renderPayroll();
-  refreshTopbarBadges();
 }
 
 // ---------- Shared helpers ----------
@@ -1120,6 +1182,7 @@ function myTeamApp(businessId){ return DB.teamApps().find(a => a.workerId === cu
 function renderFind(){
   if(currentUser.role !== 'worker') return;
   renderMyEmployerShifts();
+  renderMySeekerAd();
   const businesses = DB.users().filter(u => u.role === 'business').filter(biz => {
     const app = myTeamApp(biz.id);
     return !(app && app.status === 'accepted');
@@ -1782,7 +1845,7 @@ function renderNotifications(){
         (unreadCount > 0 ? '<button class="btn-link" onclick="markAllNotificationsRead()">Mark all read</button>' : '') +
         '<button class="modal-close" onclick="closeNotifications()">✕</button>' +
       '</div></div>' +
-    '<div style="overflow-y:auto;flex:1;">' + rows + '</div>';
+    '<div class="thread-list" style="overflow-y:auto;flex:1;">' + rows + '</div>';
 }
 function markAllNotificationsRead(){
   if(!currentUser) return;
@@ -1986,6 +2049,7 @@ function handlePostJob(e){
   });
   DB.saveJobs(jobs);
   logActivity(currentUser.id, 'pencil', 'You posted "' + title + '" — your team can now take it');
+  showSuccessToast('Your shift is posted and live!');
   document.getElementById('post-form').reset();
   document.getElementById('job-slots').value = 1;
   document.getElementById('job-shift-start').value = '';
@@ -2104,6 +2168,7 @@ function closePostComposer(){
 
 function timeAgo(ts){
   if(!ts) return '';
+  ts = new Date(ts).getTime();
   const mins = Math.floor((Date.now() - ts) / 60000);
   if(mins < 1) return 'just now';
   if(mins < 60) return mins + 'm ago';
@@ -3232,6 +3297,31 @@ function approveWorkerPayroll(workerId){
 // ─────────────────────────────────────────────────────────────────────────────
 // SEEKER POSTS — worker posts a "looking for work" ad, visible to businesses
 // ─────────────────────────────────────────────────────────────────────────────
+function renderMySeekerAd(){
+  const el = document.getElementById('my-seeker-ad');
+  if(!el) return;
+  const mine = (DB.seekerPosts() || []).find(p => p.workerId === currentUser.id);
+  if(!mine){
+    el.innerHTML =
+      '<div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-m);padding:16px 18px;">' +
+        '<div style="font-weight:600;margin-bottom:4px;">Advertise your availability</div>' +
+        '<div style="font-size:13px;color:var(--ink-soft);margin-bottom:12px;">Post a short ad so businesses on TASSQR can find and invite you to their team. Only you and businesses can see it — other workers can\'t.</div>' +
+        '<button class="btn btn-outline" onclick="openSeekerPost()">+ Let businesses know I\'m available</button>' +
+      '</div>';
+    return;
+  }
+  el.innerHTML =
+    '<div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-m);padding:16px 18px;">' +
+      '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">' +
+        '<span class="skill-tag" style="background:var(--green-bg);color:var(--green);">● Live — visible to businesses</span>' +
+      '</div>' +
+      '<div style="font-weight:700;font-size:15px;margin-bottom:4px;">' + escapeHtml(mine.headline) + '</div>' +
+      (mine.available ? '<div style="font-size:12.5px;color:var(--ink-soft);margin-bottom:8px;">🕐 ' + escapeHtml(mine.available) + '</div>' : '') +
+      (mine.note ? '<div style="font-size:13.5px;line-height:1.5;margin-bottom:12px;">' + escapeHtml(mine.note) + '</div>' : '') +
+      '<div style="font-size:11.5px;color:var(--ink-soft);margin-bottom:12px;">This is exactly what businesses see — only you and businesses can view it, no other workers.</div>' +
+      '<button class="btn btn-outline btn-sm" onclick="openSeekerPost()">Edit my ad</button>' +
+    '</div>';
+}
 function openSeekerPost(){
   if(!currentUser || currentUser.role !== 'worker') return;
   const cv = currentUser.cv || {};
@@ -3319,12 +3409,15 @@ function saveSeekerPost(e){
     }),
     ts: Date.now() });
   DB.saveSeekerPosts(posts);
+  logActivity(currentUser.id, 'pencil', 'You advertised your availability — businesses can now find and invite you');
+  showSuccessToast('Your ad is live — businesses can now find you!');
   closeWorkerModal();
   renderFind();
 }
 function removeSeekerPost(){
   DB.saveSeekerPosts((DB.seekerPosts()||[]).filter(p => p.workerId !== currentUser.id));
   closeWorkerModal();
+  renderFind();
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
